@@ -63,3 +63,6 @@ override.tf.json
 # Misc
 tmp/
 .cache/
+
+# Local-only GitHub Actions workflows
+.github/workflows/*.yml
