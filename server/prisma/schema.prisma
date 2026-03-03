@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String            @id @default(uuid())
+  email        String            @unique
+  nickname     String
+  password     String
+  currentLevel Int               @default(1)
+  totalExp     Int               @default(0)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  speechLogs    SpeechLog[]
+  quizResults   QuizResult[]
+  achievements  UserAchievement[]
+
+  @@map("users")
+}
+
+model Achievement {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  iconUrl     String?
+  condition   String
+  createdAt   DateTime @default(now())
+
+  userAchievements UserAchievement[]
+
+  @@map("achievements")
+}
+
+model UserAchievement {
+  id            String   @id @default(uuid())
+  userId        String
+  achievementId String
+  unlockedAt    DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id])
+  achievement Achievement @relation(fields: [achievementId], references: [id])
+
+  @@unique([userId, achievementId])
+  @@map("user_achievements")
+}
+
+model SpeechLog {
+  id                 String   @id @default(uuid())
+  userId             String
+  transcribedText    String   @db.Text
+  pronunciationScore Int
+  fluencyScore       Int
+  duration           Float
+  createdAt          DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@map("speech_logs")
+}
+
+model Quiz {
+  id         String   @id @default(uuid())
+  question   String   @db.Text
+  answer     String
+  difficulty Int
+  category   String
+  tags       String?
+
+  results QuizResult[]
+
+  @@index([difficulty, category])
+  @@map("quizzes")
+}
+
+model QuizResult {
+  id              String   @id @default(uuid())
+  userId          String
+  quizId          String
+  isCorrect       Boolean
+  responseTimeMs  Int
+  difficultyLevel Int
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  quiz Quiz @relation(fields: [quizId], references: [id])
+
+  @@index([userId, createdAt])
+  @@map("quiz_results")
+}

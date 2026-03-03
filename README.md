@@ -395,8 +395,8 @@ npm install
 # 인프라 (MySQL + Redis)
 docker-compose up -d
 
-# DB 마이그레이션
-cd server && npx prisma migrate dev
+# DB 마이그레이션 (개발 초기: Day 1~4)
+cd server && npx prisma migrate dev --name init
 
 # 서버 실행
 npm run dev:server   # :3000
@@ -416,6 +416,11 @@ AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
 AWS_REGION=ap-northeast-2
 ```
+
+**Prisma 마이그레이션 운영 규칙**
+- 개발 초기(Day 1~4): `prisma migrate dev`로 마이그레이션 생성 + 적용
+- 프로덕션(Week 9+): `prisma migrate deploy`로 생성된 마이그레이션만 적용
+- 금지: `prisma db push` (이력 누락), `prisma migrate reset` (데이터 초기화 위험)
 
 ---
 

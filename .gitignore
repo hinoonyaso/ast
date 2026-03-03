@@ -65,4 +65,4 @@ tmp/
 .cache/
 
 # Local-only GitHub Actions workflows
-.github/workflows/*.yml
+.github/workflows/local-*.yml

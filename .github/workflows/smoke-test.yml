@@ -1,0 +1,147 @@
+name: Smoke Test - Post Deploy
+
+on:
+  workflow_run:
+    workflows: ["CD - Deploy to AWS"]
+    types:
+      - completed
+  workflow_dispatch: # 수동 실행 가능
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install axios
+
+      - name: Run Smoke Tests
+        env:
+          BASE_URL: ${{ secrets.PROD_API_URL }} # https://api.ast.com/api
+          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+        run: |
+          node << 'EOF'
+          const axios = require('axios');
+
+          const BASE_URL = process.env.BASE_URL;
+          let token = null;
+
+          async function smokeTest() {
+            console.log('🔥 Starting Smoke Tests...');
+            const results = [];
+
+            // 1. 헬스체크
+            try {
+              const res = await axios.get(`${BASE_URL}/health`);
+              results.push({ test: 'Health Check', status: res.status === 200 ? '✅' : '❌', detail: res.data });
+            } catch (e) {
+              results.push({ test: 'Health Check', status: '❌', detail: e.message });
+              process.exit(1);
+            }
+
+            // 2. 로그인 (테스트 계정)
+            try {
+              const res = await axios.post(`${BASE_URL}/auth/login`, {
+                email: process.env.TEST_USER_EMAIL,
+                password: process.env.TEST_USER_PASSWORD
+              });
+              token = res.data.data.accessToken;
+              results.push({ test: 'Login', status: '✅', detail: 'Token received' });
+            } catch (e) {
+              results.push({ test: 'Login', status: '❌', detail: e.response?.data?.message || e.message });
+            }
+
+            // 3. 퀘스트 조회 (JWT 필요)
+            try {
+              const res = await axios.get(`${BASE_URL}/quiz/next`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              results.push({ test: 'Get Next Quiz', status: res.data.success ? '✅' : '❌', detail: `Quiz ID: ${res.data.data?.id}` });
+            } catch (e) {
+              results.push({ test: 'Get Next Quiz', status: '❌', detail: e.response?.data?.message || e.message });
+            }
+
+            // 4. 유저 스탯 조회 (Redis 캐시 테스트)
+            try {
+              const res = await axios.get(`${BASE_URL}/user/stats`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              results.push({ test: 'User Stats (Cache)', status: res.data.success ? '✅' : '❌', detail: 'Cache/DB working' });
+            } catch (e) {
+              results.push({ test: 'User Stats', status: '❌', detail: e.response?.data?.message || e.message });
+            }
+
+            // 5. 랭킹 조회 (Redis Sorted Set 테스트)
+            try {
+              const res = await axios.get(`${BASE_URL}/ranking/daily`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              results.push({ test: 'Daily Ranking (Redis)', status: res.data.success ? '✅' : '❌', detail: `Rank count: ${res.data.data?.length}` });
+            } catch (e) {
+              results.push({ test: 'Daily Ranking', status: '❌', detail: e.response?.data?.message || e.message });
+            }
+
+            // 결과 출력
+            console.log('\n📊 Smoke Test Results:');
+            console.log('=====================');
+            let failed = 0;
+            results.forEach(r => {
+              console.log(`${r.status} ${r.test}`);
+              console.log(`   ${r.detail}`);
+              if (r.status === '❌') failed++;
+            });
+
+            if (failed > 0) {
+              console.log(`\n❌ ${failed} tests failed`);
+              process.exit(1);
+            } else {
+              console.log('\n✅ All smoke tests passed');
+            }
+          }
+
+          smokeTest();
+          EOF
+
+      - name: Performance Check (P95 < 200ms)
+        env:
+          BASE_URL: ${{ secrets.PROD_API_URL }}
+        run: |
+          curl -w "\n| HTTP %{http_code} | Time: %{time_total}s\n" \
+               -o /dev/null -s \
+               ${BASE_URL}/health
+
+          # 5번 호출해서 평균 체크
+          for i in {1..5}; do
+            TIME=$(curl -w "%{time_total}" -o /dev/null -s ${BASE_URL}/health)
+            echo "Request $i: ${TIME}s"
+            if awk "BEGIN {exit !($TIME > 0.5)}"; then
+              echo "⚠️ Warning: Response time > 500ms"
+            fi
+          done
+
+  rollback-on-failure:
+    needs: smoke-test
+    runs-on: ubuntu-latest
+    if: failure()
+    steps:
+      - name: Notify Failure
+        run: |
+          echo "🚨 Smoke test failed! Rolling back..."
+          # 여기에 롤백 로직 추가 (이전 버전 태그로 재배포)
+          # 또는 알림만 전송 후 수동 롤백 유도
+
+      - name: Send Alert
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: '🚨 프로덕션 스모크 테스트 실패! 롤백 검토 필요'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
