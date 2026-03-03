@@ -1,0 +1,33 @@
+[context]
+exclude = [
+  # 빌드 산출물
+  "client/build/",
+  "client/library/",
+  "client/temp/",
+  "client/local/",
+  "server/dist/",
+  "server/node_modules/",
+
+  # Cocos 자동 생성 파일
+  "client/assets/**/*.meta",
+  "client/**/*.scene", # 씬 파일은 바이너리라 diff 무의미
+
+  # 로그/덤프
+  "*.log",
+  "logs/",
+  ".npm/",
+
+  # 민감정보
+  ".env",
+  ".env.*",
+  "*.pem",
+
+  # 테스트 커버리지 리포트
+  "coverage/",
+  ".nyc_output/"
+]
+
+[behavior]
+always_check_types = true
+test_before_commit = true
+max_file_modify = 5 # 한 번에 5개 이상 파일 수정 시 경고
