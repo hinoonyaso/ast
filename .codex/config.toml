@@ -31,3 +31,6 @@ exclude = [
 always_check_types = true
 test_before_commit = true
 max_file_modify = 5 # 한 번에 5개 이상 파일 수정 시 경고
+
+[mcp_servers.notion]
+url = "https://mcp.notion.com/mcp"
